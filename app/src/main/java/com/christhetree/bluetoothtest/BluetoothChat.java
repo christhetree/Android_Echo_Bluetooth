@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -22,10 +23,16 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.io.IOException;
+
 /**
  * This is the main Activity that displays the current chat session.
  */
 public class BluetoothChat extends Activity {
+    public static MediaPlayer mMediaPlayer;
+    public static long mOffset = 0;
+
     // Debugging
     private static final String TAG = "BluetoothChat";
     private static final boolean D = true;
@@ -61,6 +68,27 @@ public class BluetoothChat extends Activity {
         super.onCreate(savedInstanceState);
         if(D) Log.e(TAG, "+++ ON CREATE +++");
         setContentView(R.layout.main);
+
+        mMediaPlayer = new MediaPlayer();
+
+        if(mMediaPlayer != null) {
+            mMediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                public void onPrepared(MediaPlayer mp) {
+                    Toast.makeText(getApplicationContext(), "Ready!", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+        try {
+            if(mMediaPlayer != null) {
+                mMediaPlayer.setDataSource("http://mp3dos.com/assets/songs/18000-18999/18615-niggas-in-paris-jay-z-kanye-west--1411570006.mp3");
+//                mMediaPlayer.setDataSource(Environment.getExternalStorageDirectory().toString() + "/Stuff/testsong.mp3");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if (mMediaPlayer != null) {
+            mMediaPlayer.prepareAsync();
+        }
 
 //        // Set up the window layout
 //        requestWindowFeature(Window.FEATURE_CUSTOM_TITLE);
@@ -149,6 +177,10 @@ public class BluetoothChat extends Activity {
         // Stop the Bluetooth chat services
         if (mChatService != null) mChatService.stop();
         if(D) Log.e(TAG, "--- ON DESTROY ---");
+        if (mMediaPlayer != null) {
+            mMediaPlayer.release();
+            mMediaPlayer = null;
+        }
     }
     private void ensureDiscoverable() {
         if(D) Log.d(TAG, "ensure discoverable");
@@ -163,7 +195,7 @@ public class BluetoothChat extends Activity {
      * Sends a message.
      * @param message  A string of text to send.
      */
-    private void sendMessage(String message) {
+    public void sendMessage(String message) {
         // Check that we're actually connected before trying anything
         if (mChatService.getState() != BluetoothChatService.STATE_CONNECTED) {
             Toast.makeText(this, R.string.not_connected, Toast.LENGTH_SHORT).show();

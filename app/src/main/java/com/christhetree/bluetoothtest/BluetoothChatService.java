@@ -9,9 +9,11 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothServerSocket;
 import android.bluetooth.BluetoothSocket;
 import android.content.Context;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.os.SystemClock;
 import android.util.Log;
 /**
  * This class does all the work for setting up and managing Bluetooth
@@ -34,6 +36,7 @@ public class BluetoothChatService {
     private ConnectThread mConnectThread;
     private ConnectedThread mConnectedThread;
     private int mState;
+    private BluetoothChat mBluetoothChat;
     // Constants that indicate the current connection state
     public static final int STATE_NONE = 0;       // we're doing nothing
     public static final int STATE_LISTEN = 1;     // now listening for incoming connections
@@ -48,6 +51,7 @@ public class BluetoothChatService {
         mAdapter = BluetoothAdapter.getDefaultAdapter();
         mState = STATE_NONE;
         mHandler = handler;
+        mBluetoothChat = (BluetoothChat) context;
     }
     /**
      * Set the current state of the chat connection
@@ -322,9 +326,93 @@ public class BluetoothChatService {
             int bytes;
             // Keep listening to the InputStream while connected
             while (true) {
+                long currentTime = SystemClock.uptimeMillis();
                 try {
                     // Read from the InputStream
                     bytes = mmInStream.read(buffer);
+
+                    // construct a string from the valid bytes in the buffer
+                    String readMessage = new String(buffer, 0, bytes);
+
+                    if(readMessage.startsWith("sync0")) {
+                        String sync1 = "sync1 " + Long.toString(currentTime);
+                        byte[] send = sync1.getBytes();
+                        write(send);
+                    }
+                    if(readMessage.startsWith("sync1")) {
+                        String sync2 = "sync2 " + readMessage + " " + Long.toString(currentTime) + " " + Long.toString(SystemClock.uptimeMillis());
+                        byte[] send = sync2.getBytes();
+                        write(send);
+                    }
+                    if(readMessage.startsWith("sync2")) {
+                        long t4 = currentTime;
+                        String[] times = readMessage.split(" ");
+                        long t1 = Long.parseLong(times[2]);
+                        long t2 = Long.parseLong(times[3]);
+                        long t3 = Long.parseLong(times[4]);
+                        long offset = Math.round(((t2 - t1) + (t3 - t4)) / 2l);
+                        Log.d("merpyderpy", Long.toString(offset));
+                        BluetoothChat.mOffset = offset;
+                    }
+                    if(readMessage.equals("t")) {
+                        String start2 = "t2";
+                        byte[] send = start2.getBytes();
+                        write(send);
+                        write(Long.toString(SystemClock.uptimeMillis()).getBytes());
+                    }
+                    if(readMessage.equals("t2")) {
+                        write(Long.toString(SystemClock.uptimeMillis()).getBytes());
+                    }
+                    if(readMessage.equals("s")) {
+                        String start2 = "s2";
+                        byte[] send = start2.getBytes();
+                        write(send);
+                        long time = SystemClock.uptimeMillis();
+                        long futureTime = (time + 5000l) / 10000l * 10000l;
+                        if (futureTime - time < 5000) {
+                            futureTime += 10000;
+                        }
+                        Handler handler = new Handler();
+                        handler.postAtTime(new Runnable() {
+                            @Override
+                            public void run() {
+                                BluetoothChat.mMediaPlayer.start();
+                            }
+                        }, futureTime);
+                    }
+                    if(readMessage.equals("s2")) {
+                        long time = SystemClock.uptimeMillis() - BluetoothChat.mOffset;
+                        long futureTime = (time + 5000l) / 10000l * 10000l;
+                        if (futureTime - time < 5000) {
+                            futureTime += 10000;
+                        }
+                        Handler handler = new Handler();
+                        handler.postAtTime(new Runnable() {
+                            @Override
+                            public void run() {
+                                BluetoothChat.mMediaPlayer.start();
+                            }
+                        }, futureTime + BluetoothChat.mOffset);
+                    }
+                    if(readMessage.equals("p")) {
+                        String pause2 = "p2";
+                        byte[] send = pause2.getBytes();
+                        write(send);
+                        BluetoothChat.mMediaPlayer.pause();
+                    }
+                    if(readMessage.equals("p2")) {
+                        BluetoothChat.mMediaPlayer.pause();
+                    }
+                    if(readMessage.equals("r")) {
+                        String reset2 = "r2";
+                        byte[] send = reset2.getBytes();
+                        write(send);
+                        BluetoothChat.mMediaPlayer.seekTo(0);
+                    }
+                    if(readMessage.equals("r2")) {
+                        BluetoothChat.mMediaPlayer.seekTo(0);
+                    }
+
                     // Send the obtained bytes to the UI Activity
                     mHandler.obtainMessage(BluetoothChat.MESSAGE_READ, bytes, -1, buffer)
                             .sendToTarget();
